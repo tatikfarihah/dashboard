@@ -37,33 +37,7 @@ def build_lstm_model(input_shape, units, dropout):
     model.compile(loss='mse', optimizer='adam')
     return model
 
-# Load data
-df = pd.read_excel("DATA FIKS.xlsx")
-dataY = df['Price'].values.reshape(-1, 1)
-dataX = df.drop(['Date', 'Price'], axis=1).values  # drop columns you don't want
-feature_names = df.drop(['Date', 'Price'], axis=1).columns.tolist()
-
-# Standarisasi data
-scalerX, scalerY = StandardScaler(), StandardScaler()
-dataX = scalerX.fit_transform(dataX)
-dataY = scalerY.fit_transform(dataY)
-
-# Buat model
-look_back = 1
-train_size = int(len(dataX) * 0.8)
-trainX, testX = dataX[:train_size], dataX[train_size:]
-trainY, testY = dataY[:train_size], dataY[train_size:]
-
-trainX, trainY = create_dataset(trainX, trainY, look_back)
-testX, testY = create_dataset(testX, testY, look_back)
-
-# Bentuk ulang input menjadi 3D
-trainX = trainX.reshape(trainX.shape[0], look_back, trainX.shape[2])
-testX = testX.reshape(testX.shape[0], look_back, testX.shape[2])
-
-# Dashboard menggunakan Streamlit
-st.title("Prediksi Harga Bitcoin")
-
+# Build and Train Model
 def build_and_train_model():
     st.session_state.model = None
     st.session_state.testY_actual = None
@@ -99,88 +73,137 @@ def build_and_train_model():
     st.session_state.testPredict = scalerY.inverse_transform(testPredict_scaled)
     st.session_state.testY_actual = scalerY.inverse_transform(testY_selected)
 
-# Multiselect widget to choose input variables
-selected_features = st.multiselect(
-    'Pilih variabel input', 
-    feature_names, 
-    key='selected_features', 
-    on_change=build_and_train_model  # Automatically calls the function when the selection changes
+# Load data
+df = pd.read_excel("DATA FIKS.xlsx")
+dataY = df['Price'].values.reshape(-1, 1)
+dataX = df.drop(['Date', 'Price'], axis=1).values  # drop columns you don't want
+feature_names = df.drop(['Date', 'Price'], axis=1).columns.tolist()
+
+# Standarisasi data
+scalerX, scalerY = StandardScaler(), StandardScaler()
+dataX = scalerX.fit_transform(dataX)
+dataY = scalerY.fit_transform(dataY)
+
+# Buat model
+look_back = 1
+train_size = int(len(dataX) * 0.8)
+trainX, testX = dataX[:train_size], dataX[train_size:]
+trainY, testY = dataY[:train_size], dataY[train_size:]
+
+trainX, trainY = create_dataset(trainX, trainY, look_back)
+testX, testY = create_dataset(testX, testY, look_back)
+
+# Bentuk ulang input menjadi 3D
+trainX = trainX.reshape(trainX.shape[0], look_back, trainX.shape[2])
+testX = testX.reshape(testX.shape[0], look_back, testX.shape[2])
+
+
+st.sidebar.title("Drawer Menu")
+
+# Item-item dalam drawer
+option = st.sidebar.selectbox(
+    'Pilih opsi dari drawer',
+    ['Home', 'Dashboard' ,'Analisis Data', 'Profil']
 )
 
-# Jika tidak ada variabel yang dipilih, berikan pesan
-if len(selected_features) == 0:
-    st.write("Silakan pilih setidaknya satu variabel untuk memulai prediksi.")
-else:
-    if st.session_state.testY_actual is not None and st.session_state.testPredict is not None:
-        
-        # Hitung MAPE
-        test_mape = mean_absolute_percentage_error(st.session_state.testY_actual, st.session_state.testPredict)
-        st.write(f"Loss (MAPE) pada data testing: {test_mape:.2f}")
+st.sidebar.write("Opsi yang dipilih:", option)
 
-        # Plot hasil prediksi vs aktual
-        st.subheader("Grafik Prediksi vs Data Aktual")
-        fig, ax = plt.subplots()
-        ax.plot(st.session_state.testY_actual, label="Data Aktual")
-        ax.plot(st.session_state.testPredict, label="Prediksi")
-        ax.legend()
-        st.pyplot(fig)
+if option == 'Home':
+    st.title("Informasi tentang Aplikasi")
 
-        # SHAP interpretation berdasarkan data testing (not implemented yet)
-        # st.subheader("Grafik SHAP untuk Interpretasi Model pada Data Testing")
-        # fig, ax = plt.subplots()
-        # st.pyplot(fig)
+elif option == 'Dashboard':
+    # Dashboard menggunakan Streamlit
+    st.title("Prediksi Harga Bitcoin")
 
-        # Prediksi 1 periode ke depan berdasarkan harga dan volume perdagangan
-        st.subheader("Prediksi 1 Hari ke Depan")
+    # Multiselect widget to choose input variables
+    selected_features = st.multiselect(
+        'Pilih variabel input', 
+        feature_names, 
+        key='selected_features', 
+        on_change=build_and_train_model  # Automatically calls the function when the selection changes
+    )
 
-        selected_indices = [False, False, False, False, False]
+    # Jika tidak ada variabel yang dipilih, berikan pesan
+    if len(selected_features) == 0:
+        st.write("Silakan pilih setidaknya satu variabel untuk memulai prediksi.")
+    else:
+        if st.session_state.testY_actual is not None and st.session_state.testPredict is not None:
+            
+            # Hitung MAPE
+            test_mape = mean_absolute_percentage_error(st.session_state.testY_actual, st.session_state.testPredict)
+            st.write(f"Loss (MAPE) pada data testing: {test_mape:.2f}")
 
-        # Input pengguna untuk prediksi 1 hari ke depan
-        if 'Price_Lag1' in st.session_state.selected_features:
-            harga_btc_t1 = st.number_input('Harga Bitcoin t-1', value=st.session_state.harga_btc, format="%.2f")
-            selected_indices[3] = True
-        else:
-            harga_btc_t1 = 0
+            # Plot hasil prediksi vs aktual
+            st.subheader("Grafik Prediksi vs Data Aktual")
+            fig, ax = plt.subplots()
+            ax.plot(st.session_state.testY_actual, label="Data Aktual")
+            ax.plot(st.session_state.testPredict, label="Prediksi")
+            ax.legend()
+            st.pyplot(fig)
 
-        if 'Vol' in st.session_state.selected_features:
-            volume_btc = st.number_input('Volume Perdagangan Bitcoin', value=st.session_state.volume, format="%.2f")
-            selected_indices[4] = True
-        else:
-            volume_btc = 0
+            # SHAP interpretation berdasarkan data testing (not implemented yet)
+            # st.subheader("Grafik SHAP untuk Interpretasi Model pada Data Testing")
+            # fig, ax = plt.subplots()
+            # st.pyplot(fig)
 
-        if 'Nasdaq' in st.session_state.selected_features:
-            nasdaq = st.number_input('Valuasi Nasdaq', value=st.session_state.nasdaq, format="%.2f")
-            selected_indices[1] = True
-        else:
-            nasdaq = 0
+            # Prediksi 1 periode ke depan berdasarkan harga dan volume perdagangan
+            st.subheader("Prediksi 1 Hari ke Depan")
 
-        if 'Harga_Emas' in st.session_state.selected_features:
-            harga_emas = st.number_input('Harga Pasar Emas', value=st.session_state.harga_emas, format="%.2f")
-            selected_indices[0] = True
-        else:
-            harga_emas = 0
+            selected_indices = [False, False, False, False, False]
 
-        if 'S&P_500' in st.session_state.selected_features:
-            sp_500 = st.number_input('S&P 500', value=st.session_state.sp_500, format="%.2f")
-            selected_indices[2] = True
-        else: 
-            sp_500 = 0
+            # Input pengguna untuk prediksi 1 hari ke depan
+            if 'Price_Lag1' in st.session_state.selected_features:
+                harga_btc_t1 = st.number_input('Harga Bitcoin t-1', value=st.session_state.harga_btc, format="%.2f")
+                selected_indices[3] = True
+            else:
+                harga_btc_t1 = 0
 
-        # Bentuk array input untuk prediksi 1 hari ke depan
-        # Create the input array from user input values
-        next_input = np.array([harga_emas, nasdaq, sp_500, harga_btc_t1, volume_btc])
+            if 'Vol' in st.session_state.selected_features:
+                volume_btc = st.number_input('Volume Perdagangan Bitcoin', value=st.session_state.volume, format="%.2f")
+                selected_indices[4] = True
+            else:
+                volume_btc = 0
 
-        # Scale the input using the scaler
-        next_input_scaled = scalerX.transform(next_input.reshape(1, -1)).reshape(1, 1, next_input.shape[-1])
+            if 'Nasdaq' in st.session_state.selected_features:
+                nasdaq = st.number_input('Valuasi Nasdaq', value=st.session_state.nasdaq, format="%.2f")
+                selected_indices[1] = True
+            else:
+                nasdaq = 0
 
-        # Select only the features that are chosen by the user
-        next_input_model = np.array([next_input_scaled[0, 0, i] for i in range(next_input_scaled.shape[2]) if selected_indices[i]]).reshape(1, 1, -1)
+            if 'Harga_Emas' in st.session_state.selected_features:
+                harga_emas = st.number_input('Harga Pasar Emas', value=st.session_state.harga_emas, format="%.2f")
+                selected_indices[0] = True
+            else:
+                harga_emas = 0
 
-        # Prediksi 1 hari ke depan
-        next_prediction_scaled = st.session_state.model.predict(next_input_model)
-        next_prediction = scalerY.inverse_transform(next_prediction_scaled)
+            if 'S&P_500' in st.session_state.selected_features:
+                sp_500 = st.number_input('S&P 500', value=st.session_state.sp_500, format="%.2f")
+                selected_indices[2] = True
+            else: 
+                sp_500 = 0
 
-        st.write(f"Prediksi Harga Bitcoin 1 Hari ke Depan: {next_prediction[0][0]:.2f}")
+            # Bentuk array input untuk prediksi 1 hari ke depan
+            # Create the input array from user input values
+            next_input = np.array([harga_emas, nasdaq, sp_500, harga_btc_t1, volume_btc])
+
+            # Scale the input using the scaler
+            next_input_scaled = scalerX.transform(next_input.reshape(1, -1)).reshape(1, 1, next_input.shape[-1])
+
+            # Select only the features that are chosen by the user
+            next_input_model = np.array([next_input_scaled[0, 0, i] for i in range(next_input_scaled.shape[2]) if selected_indices[i]]).reshape(1, 1, -1)
+
+            # Prediksi 1 hari ke depan
+            next_prediction_scaled = st.session_state.model.predict(next_input_model)
+            next_prediction = scalerY.inverse_transform(next_prediction_scaled)
+
+            st.write(f"Prediksi Harga Bitcoin 1 Hari ke Depan: {next_prediction[0][0]:.2f}")
+
+elif option == 'Analisis Data':
+    st.title("Analisis Data")
+    st.write("Ini adalah halaman analisis data.")
+elif option == 'Profile':
+    st.title("Profile Penulis")
+    st.write("Ini adalah halaman tentang Penulis.")
 
 # cara run nya   --streamlit run ./dashboard.py--
 # semangat semhasnya hehehe
